@@ -1,0 +1,8 @@
+services:
+  nginx:
+    image: nginx:latest
+    container_name: mini-soc-nginx
+    ports:
+      - "8081:80"
+    volumes:
+      - ./logs:/var/log/nginx
