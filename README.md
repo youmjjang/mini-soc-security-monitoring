@@ -136,6 +136,7 @@ reports/
 mini-soc-security-monitoring/
 ├── .env.example
 ├── .gitignore
+├── FINAL_DEMO.md
 ├── README.md
 ├── agent_desk.py
 ├── agent_result.json
@@ -170,6 +171,7 @@ mini-soc-security-monitoring/
 | `notify.py` | Slack 알림 |
 | `reporter.py` | 일일 Markdown 보고서 생성 |
 | `run_demo.py` | 서버와 Agent를 한 번에 실행하는 데모 |
+| `FINAL_DEMO.md` | 최종 시연 순서와 샘플 결과 정리 |
 | `alerts.json` | 탐지된 경보 저장 |
 | `incidents.json` | Alert Server가 수신한 사건 저장 |
 | `agent_result.json` | Agent 최종 처리 결과 저장 |
@@ -209,6 +211,19 @@ Alert Server 실행
 ```
 
 LLM API Key와 Slack Webhook이 없어도 fallback 판단을 이용해 기본 데모를 실행할 수 있습니다.
+
+### 샘플 최종 시연 결과
+
+현재 `sample_server.log`는 4개 탐지 규칙이 모두 확인되도록 구성했습니다.
+
+- 입력 이벤트: 11건
+- 경보: 6건
+- HIGH: 2건
+- MEDIUM: 3건
+- LOW: 1건
+- 탐지 규칙: HTTP Error / Brute Force / Password Spraying / Night Login
+
+자세한 시연 순서와 확인 항목은 [FINAL_DEMO.md](FINAL_DEMO.md)에 정리했습니다.
 
 ---
 
