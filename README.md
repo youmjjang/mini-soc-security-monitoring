@@ -54,10 +54,10 @@ Markdown 일일 보고서
 |---|---|---|
 | HTTP Error | HTTP Status Code 400 이상 | LOW |
 | Brute Force | 동일 IP에서 60초 이내 로그인 실패 5회 이상 | HIGH |
-| Password Spraying | 동일 IP에서 서로 다른 계정 3개 이상 로그인 실패 | HIGH |
+| Password Spraying | 동일 IP에서 300초 이내 서로 다른 계정 3개 이상 로그인 실패 | HIGH |
 | Night Login | 00:00~06:00 로그인 성공 | MEDIUM |
 
-중복 탐지 결과는 `deduplicate_alerts()`에서 제거합니다.
+중복 탐지 결과는 `deduplicate_alerts()`에서 제거합니다. 로그인 이벤트 시간은 기존 `HH:MM` 형식과 `HH:MM:SS` 형식을 모두 지원하며, 60초/300초 시간창을 더 정확히 검증하려면 초 단위 로그 사용을 권장합니다.
 
 ### 위험도 판단
 탐지된 경보는 `llm_judge.py`에서 판단합니다.
@@ -94,6 +94,8 @@ Flask 기반 Alert Server를 사용합니다.
 |---|---|---|
 | GET | `/status` | 서버 상태 및 사건 수 확인 |
 | GET | `/help` | API 도움말 |
+| GET | `/dashboard` | 사건 수·위험도·공격 IP·최근 사건 대시보드 |
+| GET | `/api/incidents` | 저장된 사건 JSON 조회 |
 | POST | `/alert` | 경보/사건 수신 및 저장 |
 
 기본 포트는 `5001`입니다.
@@ -148,13 +150,17 @@ mini-soc-security-monitoring/
 ├── incidents.json
 ├── llm_judge.py
 ├── log_reader.py
+├── live_monitor.py
 ├── logs/
 ├── notify.py
 ├── reporter.py
 ├── requirements.txt
 ├── response_tools.py
 ├── run_demo.py
+├── run_live.py
 ├── sample_server.log
+├── tests/
+│   └── test_detector.py
 └── utils.py
 ```
 
@@ -163,6 +169,7 @@ mini-soc-security-monitoring/
 | 파일 | 역할 |
 |---|---|
 | `log_reader.py` | Nginx / 로그인 로그 파싱 |
+| `live_monitor.py` | 로그 파일에 새로 추가되는 이벤트 지속 감시 |
 | `detector.py` | 이상행위 탐지 규칙 |
 | `llm_judge.py` | AI 또는 fallback 위험도 판단 |
 | `agent_desk.py` | 전체 탐지·판단·대응 흐름 제어 |
@@ -170,7 +177,9 @@ mini-soc-security-monitoring/
 | `alert_server.py` | Flask Alert Server |
 | `notify.py` | Slack 알림 |
 | `reporter.py` | 일일 Markdown 보고서 생성 |
-| `run_demo.py` | 서버와 Agent를 한 번에 실행하는 데모 |
+| `run_demo.py` | 서버와 Agent를 한 번에 실행하는 샘플 데모 |
+| `run_live.py` | Alert Server와 지속 감시기를 한 번에 실행 |
+| `tests/test_detector.py` | 탐지 시간창·오탐 방지 회귀 테스트 |
 | `FINAL_DEMO.md` | 최종 시연 순서와 샘플 결과 정리 |
 | `alerts.json` | 탐지된 경보 저장 |
 | `incidents.json` | Alert Server가 수신한 사건 저장 |
@@ -212,6 +221,50 @@ Alert Server 실행
 
 LLM API Key와 Slack Webhook이 없어도 fallback 판단을 이용해 기본 데모를 실행할 수 있습니다.
 
+
+### 3) 실제 로그 지속 감시
+
+Docker Nginx의 access log처럼 계속 추가되는 로그를 감시할 수 있습니다.
+
+\`\`\`powershell
+python run_live.py logs/access.log
+\`\`\`
+
+여러 로그를 함께 감시하려면 경로를 이어서 지정합니다.
+
+\`\`\`powershell
+python run_live.py logs/access.log logs/login.log
+\`\`\`
+
+기본 동작은 실행 이후 **새로 추가되는 줄부터** 읽습니다. 기존 내용까지 처음부터 분석하려면 Alert Server를 별도로 실행한 뒤 다음처럼 사용할 수 있습니다.
+
+\`\`\`powershell
+python live_monitor.py logs/access.log --from-start
+\`\`\`
+
+동일 규칙·대상에 대한 반복 알림은 라이브 세션에서 5분 쿨다운을 적용해 알림 폭주를 줄입니다.
+
+### 4) 웹 대시보드
+
+Alert Server가 실행 중일 때 브라우저에서 다음 주소를 열면 현재 사건 현황을 확인할 수 있습니다.
+
+\`\`\`text
+http://127.0.0.1:5001/dashboard
+\`\`\`
+
+대시보드는 전체 사건 수, HIGH/MEDIUM/LOW 건수, 주요 공격 IP, 최근 탐지 및 대응 결과를 표시합니다.
+
+### 5) 자동 테스트
+
+외부 테스트 프레임워크 없이 Python 표준 \`unittest\`로 탐지 규칙을 검증합니다.
+
+\`\`\`powershell
+python -m unittest discover -s tests -v
+\`\`\`
+
+테스트에는 Brute Force 60초 시간창, Password Spraying 300초 시간창, 시간창 밖 오탐 방지, Night Login 경계값, HTTP Error 탐지가 포함됩니다.
+
+
 ### 샘플 최종 시연 결과
 
 현재 `sample_server.log`는 4개 탐지 규칙이 모두 확인되도록 구성했습니다.
@@ -241,7 +294,7 @@ docker compose up -d
 http://localhost:8081
 ```
 
-Docker Compose 설정은 호스트의 `./logs` 폴더와 Nginx의 `/var/log/nginx`를 연결합니다.
+Docker Compose 설정은 호스트의 `./logs` 폴더와 Nginx의 `/var/log/nginx`를 연결합니다. 컨테이너 실행 후 `python run_live.py logs/access.log`를 실행하면 이후 생성되는 요청 로그를 지속 감시할 수 있습니다.
 
 ---
 
@@ -291,6 +344,8 @@ Flask Alert Server가 실제로 수신한 사건 목록입니다.
 - 자동 대응 과정에 사용자 승인을 추가하는 Human-in-the-Loop 설계
 - 민감한 API Key와 Webhook을 환경 변수로 분리
 - 탐지 결과를 JSON과 Markdown으로 기록
+- 로그 파일의 증분 변화를 지속 감시하고 중복 알림을 제한
+- 시간창 기반 탐지 규칙을 자동 테스트로 회귀 검증
 
 ---
 
@@ -301,11 +356,9 @@ Flask Alert Server가 실제로 수신한 사건 목록입니다.
 향후에는 다음 기능을 추가할 수 있습니다.
 
 - SQLite 또는 별도 DB 적용
-- 웹 기반 관제 대시보드
-- 탐지 이벤트 검색 및 필터링
-- IP별 / 시간대별 공격 통계 시각화
-- 실제 로그 지속 감시 기능
-- 자동 테스트 코드 추가
+- 탐지 이벤트 검색 및 조건별 필터링
+- 장기간 IP별 / 시간대별 통계 저장
+- SQLite 또는 별도 DB 기반 사건 저장소 고도화
 - 실제 보안 장비 또는 방화벽 API 연동
 
 ---
