@@ -7,11 +7,12 @@ NGINX_RE = re.compile(
 )
 
 LOGIN_RE = re.compile(
-    r'(?P<time>\d{2}:\d{2})\s+'
+    r'(?P<time>\d{2}:\d{2}(?::\d{2})?)\s+'
     r'(?P<user>\S+)\s+'
     r'(?P<event>login_success|login_failed|logout)\s+'
     r'(?P<ip>\S+)'
 )
+
 
 def parse_nginx_log(line):
     m = NGINX_RE.search(line.strip())
@@ -23,6 +24,7 @@ def parse_nginx_log(line):
     data["type"] = "nginx"
     return data
 
+
 def parse_login_log(line):
     m = LOGIN_RE.search(line.strip())
     if not m:
@@ -31,8 +33,10 @@ def parse_login_log(line):
     data["type"] = "login"
     return data
 
+
 def parse_log(line):
     return parse_login_log(line) or parse_nginx_log(line)
+
 
 def read_log_file(path):
     events = []
