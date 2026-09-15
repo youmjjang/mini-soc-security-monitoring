@@ -55,9 +55,42 @@ HIGH 경보 2건은 사용자 승인 후 `block_ip` 대응을 **시뮬레이션*
 5. `POST /alert` 응답 확인
 6. Slack 설정이 없으면 `skipped` 확인
 7. 보고서 경로와 `agent_result.json` 생성 확인
+8. `http://127.0.0.1:5001/dashboard`에서 사건 수·위험도·공격 IP 확인
 
 ## 현재 범위
 
 이 프로젝트의 `block_ip`와 `lock_account`는 실제 방화벽이나 계정을 변경하지 않는 **포트폴리오용 대응 시뮬레이션**입니다. 실제 보안 장비 연동은 현재 범위에 포함하지 않았습니다.
 
 또한 Slack은 Webhook을 설정한 경우에만 실제 전송되며, Webhook이 없는 기본 공개 데모에서는 안전하게 생략됩니다.
+
+## 추가 시연: 실제 로그 지속 감시
+
+샘플 파일 1회 분석 외에 Docker Nginx access log를 계속 감시하는 흐름도 확인할 수 있습니다.
+
+```powershell
+docker compose up -d
+python run_live.py logs/access.log
+```
+
+이 상태에서 브라우저로 `http://localhost:8081`에 접속하거나 존재하지 않는 경로를 요청하면 Nginx access log에 새 줄이 추가됩니다. Mini SOC는 실행 이후 새로 추가된 로그만 읽고 탐지 규칙을 적용합니다.
+
+로그인 이벤트까지 라이브로 시연하려면 별도 `logs/login.log` 파일에 이벤트를 추가하고 두 파일을 함께 감시할 수 있습니다.
+
+```powershell
+python run_live.py logs/access.log logs/login.log
+```
+
+## 자동 테스트
+
+탐지 시간창과 오탐 방지 조건은 다음 명령으로 확인합니다.
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+주요 검증 항목:
+- 60초 안의 로그인 실패 5회는 Brute Force 탐지
+- 60초 밖으로 분산된 실패는 Brute Force 미탐지
+- 300초 안의 서로 다른 계정 3개 실패는 Password Spraying 탐지
+- 긴 시간에 흩어진 다계정 실패는 Password Spraying 미탐지
+- 06:00 이후 로그인은 Night Login 미탐지
